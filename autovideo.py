@@ -523,6 +523,89 @@ IMPORTANT RULES:
         
         return sentence_footage
     
+    def download_topic_footage_pool(self, topic, script, target_duration_seconds):
+        """
+        Download a pool of footage clips based on the main topic.
+        This is more reliable than sentence-based downloading for longer videos.
+        
+        Args:
+            topic: Main video topic
+            script: Full script text (used to extract key themes)
+            target_duration_seconds: Target video duration in seconds
+            
+        Returns:
+            List of footage paths
+        """
+        print(f"\n[FOOTAGE] Downloading topic-based footage pool...")
+        print(f"[FOOTAGE] Target duration: {target_duration_seconds:.0f} seconds")
+        
+        # Calculate how many clips we need (assuming average 8 seconds per clip)
+        avg_clip_duration = 8
+        min_clips_needed = int(target_duration_seconds / avg_clip_duration) + 5  # Add buffer
+        print(f"[FOOTAGE] Need at least {min_clips_needed} clips")
+        
+        all_clips = []
+        
+        # 1. Download clips for main topic words
+        topic_words = [w.lower().strip() for w in topic.split() if len(w) > 3 and w.isalpha()]
+        print(f"[FOOTAGE] Searching for topic keywords: {topic_words}")
+        
+        for keyword in topic_words[:3]:  # Use top 3 topic words
+            clips = self._download_from_pexels([keyword], 10)
+            all_clips.extend(clips)
+            if len(clips) < 5:
+                pixabay_clips = self._download_from_pixabay([keyword], 10)
+                all_clips.extend(pixabay_clips)
+        
+        # 2. Extract key themes from script and download clips
+        common_words = {'this', 'that', 'with', 'from', 'have', 'been', 'were', 'they', 'their', 
+                       'what', 'when', 'where', 'which', 'there', 'here', 'would', 'could', 'should',
+                       'about', 'into', 'your', 'just', 'like', 'know', 'take', 'come', 'make', 
+                       'want', 'look', 'think', 'also', 'back', 'after', 'only', 'over', 'such',
+                       'than', 'then', 'them', 'these', 'some', 'very', 'being', 'because', 'actually',
+                       'really', 'gonna', 'wanna', 'kinda', 'gotta', 'dont', 'cant', 'wont'}
+        
+        # Count word frequency in script
+        word_counts = {}
+        for word in script.lower().split():
+            word = word.strip('.,!?;:\'"()[]{}')
+            if len(word) > 4 and word.isalpha() and word not in common_words:
+                word_counts[word] = word_counts.get(word, 0) + 1
+        
+        # Get top 5 most frequent meaningful words
+        top_words = sorted(word_counts.items(), key=lambda x: x[1], reverse=True)[:5]
+        theme_keywords = [w[0] for w in top_words]
+        print(f"[FOOTAGE] Script themes: {theme_keywords}")
+        
+        for keyword in theme_keywords:
+            if keyword not in topic_words:  # Avoid duplicates
+                clips = self._download_from_pexels([keyword], 8)
+                all_clips.extend(clips)
+        
+        # 3. Add generic fallback clips if we don't have enough
+        generic_keywords = ['lifestyle', 'business', 'technology', 'nature', 'people', 'city', 'office']
+        while len(all_clips) < min_clips_needed:
+            for keyword in generic_keywords:
+                if len(all_clips) >= min_clips_needed:
+                    break
+                clips = self._download_from_pexels([keyword], 5)
+                all_clips.extend(clips)
+                if len(all_clips) < min_clips_needed:
+                    pixabay_clips = self._download_from_pixabay([keyword], 5)
+                    all_clips.extend(pixabay_clips)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_clips = []
+        for clip in all_clips:
+            clip_str = str(clip)
+            if clip_str not in seen:
+                seen.add(clip_str)
+                unique_clips.append(clip)
+        
+        print(f"[FOOTAGE] Downloaded {len(unique_clips)} unique clips for {target_duration_seconds:.0f}s video")
+        return unique_clips
+    
     def extract_segment_keywords(self, script, ai_provider='auto'):
         """
         Extract keywords for each section of the script for better footage matching.
@@ -1345,37 +1428,30 @@ We cover all the essential concepts, tips, and strategies you need to succeed.
         # Step 2: Generate voiceover
         voiceover = self.generate_voiceover(script)
         
-        # Step 3: Download footage with sentence-based matching for best sync
+        # Get audio duration for footage calculation
+        from moviepy.editor import AudioFileClip
+        audio = AudioFileClip(str(voiceover))
+        audio_duration = audio.duration
+        audio.close()
+        
+        # Step 3: Download footage using topic-based pool (more reliable for any length)
         if footage_keywords is None:
-            # Try sentence-based extraction for precise footage matching
-            sentence_keywords = self.extract_sentence_keywords(script, ai_provider)
+            # Use topic-based footage pool - more reliable for any video length
+            footage = self.download_topic_footage_pool(topic, script, audio_duration)
             
-            if sentence_keywords and len(sentence_keywords) > 0:
-                # Use sentence-based footage for best relevance
-                sentence_footage = self.download_sentence_footage(sentence_keywords)
-                # Keep all clips in sentence order (don't remove duplicates)
-                # This ensures clips appear at the right time for each sentence
-                footage = [f for f in sentence_footage if f is not None]
+            if not footage or len(footage) < 5:
+                # Fallback to sentence-based if topic pool fails
+                print("[FOOTAGE] Topic pool insufficient, trying sentence-based...")
+                sentence_keywords = self.extract_sentence_keywords(script, ai_provider)
+                if sentence_keywords and len(sentence_keywords) > 0:
+                    sentence_footage = self.download_sentence_footage(sentence_keywords)
+                    footage = [f for f in sentence_footage if f is not None]
                 
-                if not footage:
-                    # Fallback to segment-based matching
-                    print("[FOOTAGE] Sentence-based download failed, trying segment-based...")
-                    segments = self.extract_segment_keywords(script, ai_provider)
-                    if segments:
-                        segment_footage = self.download_segment_footage(segments, clips_per_segment=3)
-                        footage = []
-                        for seg_clips in segment_footage:
-                            footage.extend(seg_clips)
-                    
-                    if not footage:
-                        # Final fallback to topic-based keywords
-                        print("[FOOTAGE] Using topic keywords as final fallback...")
-                        footage_keywords = topic.split()[:3]
-                        footage = self.download_footage(footage_keywords)
-            else:
-                # Fallback to topic-based keywords
-                footage_keywords = topic.split()[:3]
-                footage = self.download_footage(footage_keywords)
+                if not footage or len(footage) < 5:
+                    # Final fallback to simple topic keywords
+                    print("[FOOTAGE] Using simple topic keywords as final fallback...")
+                    footage_keywords = topic.split()[:3]
+                    footage = self.download_footage(footage_keywords)
         else:
             # User provided specific keywords
             footage = self.download_footage(footage_keywords)
