@@ -1373,47 +1373,108 @@ Return ONLY a JSON array of strings, no other text:
     
     # ==================== METADATA GENERATION ====================
     
-    def generate_metadata(self, topic):
-        """Generate video metadata (title, description, tags)"""
-        print("\n[METADATA] Generating metadata...")
+    def generate_metadata(self, topic, script=None):
+        """Generate SEO-optimized video metadata (title, description, tags)"""
+        print("\n[METADATA] Generating SEO-optimized metadata...")
         
-        metadata = {
-            'titles': [
-                f"{topic} - Complete Guide",
-                f"How to Master {topic}",
-                f"{topic} Explained Simply",
-                f"The Ultimate {topic} Tutorial"
-            ],
-            'description': f"""In this video, you'll learn everything about {topic}.
+        # Extract key terms from topic for better tags
+        topic_words = [w.strip() for w in topic.split() if len(w) > 2]
+        topic_hashtag = "".join(w.capitalize() for w in topic_words)
+        
+        # Generate multiple title options (YouTube SEO best practices)
+        titles = [
+            f"{topic} (2024 Complete Guide)",
+            f"How to {topic} - Step by Step Tutorial",
+            f"{topic} Explained in 10 Minutes",
+            f"The TRUTH About {topic} Nobody Tells You",
+            f"{topic} for Beginners - Everything You Need to Know",
+            f"I Tried {topic} for 30 Days - Here's What Happened"
+        ]
+        
+        # SEO-optimized description with keywords front-loaded
+        description = f"""{topic} - In this comprehensive video, you'll discover everything you need to know about {topic}.
 
-We cover all the essential concepts, tips, and strategies you need to succeed.
+Whether you're a complete beginner or looking to level up your knowledge, this guide covers all the essential tips, strategies, and insights.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 📌 TIMESTAMPS:
 0:00 - Introduction
-[Add timestamps after review]
+0:30 - What is {topic}?
+1:30 - Why {topic} Matters
+3:00 - Key Concepts
+5:00 - Practical Tips
+7:00 - Common Mistakes to Avoid
+9:00 - Summary & Next Steps
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔔 SUBSCRIBE for more content!
+🔔 SUBSCRIBE and hit the bell for more content like this!
+👍 LIKE this video if you found it helpful
+💬 COMMENT below with your questions
 
-#{"".join(topic.split())} #tutorial #guide
-""",
-            'tags': [
-                topic,
-                f"{topic} tutorial",
-                f"{topic} guide",
-                f"how to {topic}",
-                f"{topic} for beginners",
-                f"{topic} explained"
-            ]
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 RELATED VIDEOS:
+[Add links to related videos]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 KEYWORDS:
+{topic}, {topic} tutorial, {topic} guide, {topic} explained, {topic} for beginners, how to {topic}, {topic} tips, {topic} 2024
+
+#{topic_hashtag} #Tutorial #Guide #HowTo #Education #Learning
+"""
+        
+        # Comprehensive tag list for YouTube SEO (max 500 characters total)
+        tags = [
+            topic,
+            f"{topic} tutorial",
+            f"{topic} guide", 
+            f"{topic} explained",
+            f"how to {topic}",
+            f"{topic} for beginners",
+            f"{topic} tips",
+            f"{topic} 2024",
+            f"learn {topic}",
+            f"{topic} step by step",
+            f"what is {topic}",
+            f"{topic} basics",
+            f"{topic} complete guide",
+            f"{topic} masterclass",
+            "tutorial",
+            "how to",
+            "guide",
+            "tips",
+            "education",
+            "learning"
+        ]
+        
+        # Add individual topic words as tags
+        for word in topic_words:
+            if word.lower() not in ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for']:
+                tags.append(word)
+        
+        metadata = {
+            'titles': titles,
+            'recommended_title': titles[0],
+            'description': description,
+            'tags': tags,
+            'hashtags': [f"#{topic_hashtag}", "#Tutorial", "#Guide", "#HowTo", "#Education"],
+            'seo_tips': {
+                'title': "Use the first title option or customize. Keep under 60 characters for best display.",
+                'description': "First 150 characters are most important - they show in search results.",
+                'tags': "Use all tags provided. YouTube allows up to 500 characters total.",
+                'thumbnail': "Use bright colors, large text, and expressive faces for higher CTR.",
+                'upload_time': "Best times: Tuesday-Thursday, 2-4 PM EST for US audience."
+            }
         }
         
         metadata_path = self.dirs['metadata'] / 'metadata.json'
         metadata_path.write_text(json.dumps(metadata, indent=2))
         
         print(f"[METADATA] Saved to: {metadata_path}")
+        print(f"[METADATA] Generated {len(titles)} title options and {len(tags)} tags")
         return metadata
     
     # ==================== MAIN PIPELINE ====================
