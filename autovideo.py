@@ -630,10 +630,15 @@ CRITICAL RULES FOR KEYWORDS:
         
         subtitles = asyncio.run(generate())
         print(f"[VOICE] Saved to: {output_path}")
+        print(f"[VOICE] Collected {len(subtitles)} word timings for subtitles")
         
         # Generate SRT subtitle file
-        if subtitles:
+        if subtitles and len(subtitles) > 0:
             self._generate_srt(subtitles, subtitle_path)
+        else:
+            # Fallback: Generate subtitles from script text with estimated timings
+            print("[SUBTITLES] No word timings from TTS, generating from script...")
+            self._generate_srt_from_script(script, subtitle_path, output_path)
         
         return output_path
     
@@ -684,6 +689,78 @@ CRITICAL RULES FOR KEYWORDS:
         
         print(f"[SUBTITLES] Saved to: {output_path}")
         print(f"[SUBTITLES] Created {len(srt_entries)} subtitle entries")
+    
+    def _generate_srt_from_script(self, script, output_path, audio_path):
+        """
+        Generate SRT subtitle file from script text with estimated timings.
+        Used as fallback when edge_tts doesn't return word timings.
+        """
+        print("[SUBTITLES] Generating subtitles from script...")
+        
+        # Get audio duration
+        try:
+            from mutagen.mp3 import MP3
+            audio = MP3(str(audio_path))
+            audio_duration_ms = int(audio.info.length * 1000)
+        except:
+            # Estimate 150 words per minute if can't get audio duration
+            word_count = len(script.split())
+            audio_duration_ms = int((word_count / 150) * 60 * 1000)
+        
+        def format_time(ms):
+            hours = ms // 3600000
+            minutes = (ms % 3600000) // 60000
+            seconds = (ms % 60000) // 1000
+            milliseconds = ms % 1000
+            return f"{hours:02d}:{minutes:02d}:{seconds:02d},{milliseconds:03d}"
+        
+        # Split script into sentences
+        import re
+        sentences = re.split(r'(?<=[.!?])\s+', script)
+        sentences = [s.strip() for s in sentences if s.strip()]
+        
+        if not sentences:
+            print("[SUBTITLES] No sentences found in script")
+            return
+        
+        # Calculate time per sentence based on word count
+        total_words = sum(len(s.split()) for s in sentences)
+        ms_per_word = audio_duration_ms / max(total_words, 1)
+        
+        # Generate SRT entries
+        srt_entries = []
+        current_time = 0
+        
+        for i, sentence in enumerate(sentences):
+            word_count = len(sentence.split())
+            duration = int(word_count * ms_per_word)
+            
+            # Split long sentences into chunks of ~10 words
+            words = sentence.split()
+            chunk_size = 10
+            
+            for j in range(0, len(words), chunk_size):
+                chunk_words = words[j:j+chunk_size]
+                chunk_text = " ".join(chunk_words)
+                chunk_duration = int(len(chunk_words) * ms_per_word)
+                
+                srt_entries.append({
+                    "index": len(srt_entries) + 1,
+                    "start": current_time,
+                    "end": current_time + chunk_duration,
+                    "text": chunk_text
+                })
+                current_time += chunk_duration
+        
+        # Write SRT file
+        with open(str(output_path), "w", encoding="utf-8") as f:
+            for entry in srt_entries:
+                f.write(f"{entry['index']}\n")
+                f.write(f"{format_time(entry['start'])} --> {format_time(entry['end'])}\n")
+                f.write(f"{entry['text']}\n\n")
+        
+        print(f"[SUBTITLES] Saved to: {output_path}")
+        print(f"[SUBTITLES] Created {len(srt_entries)} subtitle entries from script")
     
     # ==================== FOOTAGE DOWNLOAD ====================
     
