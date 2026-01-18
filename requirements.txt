@@ -1,0 +1,21 @@
+# YouTube Faceless Video Generator - Dependencies
+# Install with: pip install -r requirements.txt
+
+# Core dependencies
+edge-tts>=6.1.0
+moviepy>=1.0.3,<2.0.0
+Pillow>=9.0.0,<10.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# AI Script Generation
+google-generativeai>=0.3.0
+groq>=0.4.0
+
+# Trend Discovery
+pytrends>=4.9.0
+
+# Video processing dependencies (usually installed with moviepy)
+imageio>=2.31.0
+imageio-ffmpeg>=0.4.8
+numpy>=1.24.0
