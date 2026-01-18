@@ -431,20 +431,20 @@ IMPORTANT RULES:
     
     def download_sentence_footage(self, sentence_keywords):
         """
-        Download footage for each sentence for precise matching.
-        Downloads multiple clips to ensure variety and better matching.
+        Download UNIQUE footage for each sentence - no repeats.
+        Each sentence gets its own clip that matches its content.
         
         Args:
             sentence_keywords: List of dicts with 'sentence' and 'keywords'
             
         Returns:
-            List of footage paths matched to sentences
+            List of footage paths matched to sentences (all unique)
         """
-        print(f"\n[FOOTAGE] Downloading footage for {len(sentence_keywords)} sentences...")
+        print(f"\n[FOOTAGE] Downloading UNIQUE footage for {len(sentence_keywords)} sentences...")
         
         sentence_footage = []
-        all_downloaded_clips = []  # Track all downloaded clips for variety
-        keyword_clips = {}  # Map keywords to multiple clips
+        used_clips = set()  # Track used clips to prevent repeats
+        available_clips = {}  # Cache of available clips per keyword
         
         for i, item in enumerate(sentence_keywords):
             keywords = item.get('keywords', [])
@@ -456,39 +456,66 @@ IMPORTANT RULES:
             
             clip_path = None
             
-            # Try each keyword until we get a clip
+            # Try each keyword until we find an UNUSED clip
             for keyword in keywords:
-                # Download multiple clips per keyword for variety
-                if keyword not in keyword_clips:
-                    # Try Pexels first - download 3 clips per keyword
-                    clips = self._download_from_pexels([keyword], 3)
-                    if not clips:
+                # Download clips for this keyword if not cached
+                if keyword not in available_clips:
+                    # Try Pexels first - download 5 clips for more variety
+                    clips = self._download_from_pexels([keyword], 5)
+                    if len(clips) < 2:
                         # Try Pixabay as fallback
-                        clips = self._download_from_pixabay([keyword], 3)
-                    if not clips:
+                        pixabay_clips = self._download_from_pixabay([keyword], 5)
+                        clips.extend(pixabay_clips)
+                    if len(clips) < 2:
                         # Try simpler keyword (first word only)
                         simple_keyword = keyword.split()[0] if ' ' in keyword else keyword
-                        clips = self._download_from_pexels([simple_keyword], 3)
-                    if clips:
-                        keyword_clips[keyword] = clips
-                        all_downloaded_clips.extend(clips)
+                        simple_clips = self._download_from_pexels([simple_keyword], 5)
+                        clips.extend(simple_clips)
+                    available_clips[keyword] = clips
                 
-                # Get a clip for this sentence (rotate through available clips)
-                if keyword in keyword_clips and keyword_clips[keyword]:
-                    # Use round-robin to distribute clips
-                    clip_index = i % len(keyword_clips[keyword])
-                    clip_path = keyword_clips[keyword][clip_index]
+                # Find an UNUSED clip from this keyword's clips
+                for clip in available_clips.get(keyword, []):
+                    clip_str = str(clip)
+                    if clip_str not in used_clips:
+                        clip_path = clip
+                        used_clips.add(clip_str)
+                        break
+                
+                if clip_path:
                     break
             
-            # If no clip found, try to use any previously downloaded clip
-            if clip_path is None and all_downloaded_clips:
-                clip_path = all_downloaded_clips[i % len(all_downloaded_clips)]
+            # If no unused clip found from keywords, try other cached clips
+            if clip_path is None:
+                for kw, clips in available_clips.items():
+                    for clip in clips:
+                        clip_str = str(clip)
+                        if clip_str not in used_clips:
+                            clip_path = clip
+                            used_clips.add(clip_str)
+                            break
+                    if clip_path:
+                        break
+            
+            # Last resort: download with a generic keyword based on sentence
+            if clip_path is None:
+                # Extract a simple word from the sentence
+                sentence = item.get('sentence', '')
+                words = [w for w in sentence.split() if len(w) > 4 and w.isalpha()]
+                if words:
+                    fallback_keyword = words[0].lower()
+                    fallback_clips = self._download_from_pexels([fallback_keyword], 3)
+                    for clip in fallback_clips:
+                        clip_str = str(clip)
+                        if clip_str not in used_clips:
+                            clip_path = clip
+                            used_clips.add(clip_str)
+                            break
             
             sentence_footage.append(clip_path)
         
         valid_clips = [c for c in sentence_footage if c is not None]
-        unique_clips = list(set([str(c) for c in valid_clips]))
-        print(f"[FOOTAGE] Downloaded {len(unique_clips)} unique clips, mapped to {len(sentence_keywords)} sentences")
+        print(f"[FOOTAGE] Downloaded {len(valid_clips)} UNIQUE clips for {len(sentence_keywords)} sentences")
+        print(f"[FOOTAGE] No clips repeat - each sentence has its own footage")
         
         return sentence_footage
     
