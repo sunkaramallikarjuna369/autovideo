@@ -417,11 +417,15 @@ IMPORTANT RULES:
                                 })
                 except Exception as e:
                     print(f"[KEYWORDS] Error parsing batch: {e}")
-                    # Add sentences without keywords as fallback
+                    # Add sentences with better fallback keywords (nouns/meaningful words)
                     for s in batch_sentences:
+                        # Extract meaningful words (4+ chars, alphabetic, not common words)
+                        common_words = {'this', 'that', 'with', 'from', 'have', 'been', 'were', 'they', 'their', 'what', 'when', 'where', 'which', 'there', 'here', 'would', 'could', 'should', 'about', 'into', 'your', 'just', 'like', 'know', 'take', 'come', 'make', 'want', 'look', 'think', 'also', 'back', 'after', 'only', 'over', 'such', 'than', 'then', 'them', 'these', 'some', 'very', 'being', 'because', 'actually', 'really'}
+                        words = [w.lower().strip('.,!?;:') for w in s.split() if len(w) > 4 and w.isalpha() and w.lower() not in common_words]
+                        keywords = words[:2] if words else ['lifestyle', 'people']
                         all_sentence_keywords.append({
                             'sentence': s,
-                            'keywords': s.split()[:3]  # Use first 3 words as fallback
+                            'keywords': keywords
                         })
             
             print(f"[KEYWORDS] Processed sentences {batch_start+1}-{batch_end}")
