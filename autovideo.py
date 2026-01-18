@@ -375,22 +375,24 @@ Write the complete script now (remember: sound HUMAN, not robotic):"""
             
             sentences_text = "\n".join([f"{i+1}. {s}" for i, s in enumerate(batch_sentences)])
             
-            prompt = f"""For each sentence below, provide 2 SPECIFIC visual keywords for stock footage.
+            prompt = f"""For each sentence below, provide 2 SIMPLE stock footage search keywords.
 
 Sentences:
 {sentences_text}
 
 Return ONLY a JSON array (no other text):
 [
-  {{"sentence_num": 1, "keywords": ["specific visual scene 1", "specific visual scene 2"]}},
-  {{"sentence_num": 2, "keywords": ["specific visual scene 1", "specific visual scene 2"]}}
+  {{"sentence_num": 1, "keywords": ["keyword1", "keyword2"]}},
+  {{"sentence_num": 2, "keywords": ["keyword1", "keyword2"]}}
 ]
 
-RULES:
-- Keywords must be VISUAL and SPECIFIC: "woman typing laptop office" not "work"
-- Describe actual scenes a camera would capture
-- Think stock footage search terms
-- Each keyword should be 3-5 words describing a scene"""
+IMPORTANT RULES:
+- Keywords must be SIMPLE and GENERIC (1-3 words max)
+- Use common stock footage terms that will return results
+- Good examples: "business meeting", "typing laptop", "money coins", "happy family", "city traffic", "nature sunset"
+- BAD examples: "woman stressed looking at bills" (too specific, won't match)
+- Think like you're searching on Pexels or Pixabay
+- Each keyword should be 1-3 words only"""
 
             result = None
             if ai_provider == 'auto':
@@ -430,6 +432,7 @@ RULES:
     def download_sentence_footage(self, sentence_keywords):
         """
         Download footage for each sentence for precise matching.
+        Downloads multiple clips to ensure variety and better matching.
         
         Args:
             sentence_keywords: List of dicts with 'sentence' and 'keywords'
@@ -440,7 +443,8 @@ RULES:
         print(f"\n[FOOTAGE] Downloading footage for {len(sentence_keywords)} sentences...")
         
         sentence_footage = []
-        downloaded_cache = {}  # Cache to avoid duplicate downloads
+        all_downloaded_clips = []  # Track all downloaded clips for variety
+        keyword_clips = {}  # Map keywords to multiple clips
         
         for i, item in enumerate(sentence_keywords):
             keywords = item.get('keywords', [])
@@ -448,35 +452,43 @@ RULES:
                 sentence_footage.append(None)
                 continue
             
-            print(f"[FOOTAGE] Sentence {i+1}/{len(sentence_keywords)}: {keywords[0][:30]}...")
+            print(f"[FOOTAGE] Sentence {i+1}/{len(sentence_keywords)}: {keywords[0][:30] if keywords else 'no keywords'}...")
             
             clip_path = None
             
             # Try each keyword until we get a clip
             for keyword in keywords:
-                # Check cache first
-                if keyword in downloaded_cache:
-                    clip_path = downloaded_cache[keyword]
-                    break
+                # Download multiple clips per keyword for variety
+                if keyword not in keyword_clips:
+                    # Try Pexels first - download 3 clips per keyword
+                    clips = self._download_from_pexels([keyword], 3)
+                    if not clips:
+                        # Try Pixabay as fallback
+                        clips = self._download_from_pixabay([keyword], 3)
+                    if not clips:
+                        # Try simpler keyword (first word only)
+                        simple_keyword = keyword.split()[0] if ' ' in keyword else keyword
+                        clips = self._download_from_pexels([simple_keyword], 3)
+                    if clips:
+                        keyword_clips[keyword] = clips
+                        all_downloaded_clips.extend(clips)
                 
-                # Try Pexels
-                clips = self._download_from_pexels([keyword], 1)
-                if clips:
-                    clip_path = clips[0]
-                    downloaded_cache[keyword] = clip_path
+                # Get a clip for this sentence (rotate through available clips)
+                if keyword in keyword_clips and keyword_clips[keyword]:
+                    # Use round-robin to distribute clips
+                    clip_index = i % len(keyword_clips[keyword])
+                    clip_path = keyword_clips[keyword][clip_index]
                     break
-                
-                # Try Pixabay
-                clips = self._download_from_pixabay([keyword], 1)
-                if clips:
-                    clip_path = clips[0]
-                    downloaded_cache[keyword] = clip_path
-                    break
+            
+            # If no clip found, try to use any previously downloaded clip
+            if clip_path is None and all_downloaded_clips:
+                clip_path = all_downloaded_clips[i % len(all_downloaded_clips)]
             
             sentence_footage.append(clip_path)
         
         valid_clips = [c for c in sentence_footage if c is not None]
-        print(f"[FOOTAGE] Downloaded {len(valid_clips)} unique clips for {len(sentence_keywords)} sentences")
+        unique_clips = list(set([str(c) for c in valid_clips]))
+        print(f"[FOOTAGE] Downloaded {len(unique_clips)} unique clips, mapped to {len(sentence_keywords)} sentences")
         
         return sentence_footage
     
@@ -1233,9 +1245,9 @@ We cover all the essential concepts, tips, and strategies you need to succeed.
             if sentence_keywords and len(sentence_keywords) > 0:
                 # Use sentence-based footage for best relevance
                 sentence_footage = self.download_sentence_footage(sentence_keywords)
-                # Filter out None values and get unique clips
+                # Keep all clips in sentence order (don't remove duplicates)
+                # This ensures clips appear at the right time for each sentence
                 footage = [f for f in sentence_footage if f is not None]
-                footage = list(dict.fromkeys(footage))  # Remove duplicates while preserving order
                 
                 if not footage:
                     # Fallback to segment-based matching
