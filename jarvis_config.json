@@ -1,0 +1,43 @@
+{
+  "assistant": {
+    "name": "JARVIS",
+    "version": "1.0.0",
+    "description": "Powerful AI Voice Assistant"
+  },
+  "speech": {
+    "language": "en",
+    "speech_rate": 150,
+    "timeout_seconds": 5,
+    "supported_languages": [
+      "en",
+      "es",
+      "fr",
+      "de",
+      "it",
+      "pt",
+      "ja",
+      "zh-CN",
+      "hi",
+      "te"
+    ]
+  },
+  "ai": {
+    "model": "claude-3-5-sonnet-20241022",
+    "max_tokens": 500,
+    "temperature": 0.7
+  },
+  "commands": {
+    "quick_actions": {
+      "open_calculator": ["open calculator", "open calc"],
+      "open_terminal": ["open terminal", "open console"],
+      "get_time": ["what time is it", "tell me the time"],
+      "get_date": ["what date is it", "today's date"],
+      "shutdown": ["exit", "stop", "quit"]
+    }
+  },
+  "logging": {
+    "enabled": true,
+    "log_file": "jarvis_history.json",
+    "save_conversations": true
+  }
+}
